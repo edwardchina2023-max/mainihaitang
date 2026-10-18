@@ -4,9 +4,10 @@ import path from "node:path";
 
 const sourceDist = path.resolve(process.argv[2] ?? "");
 const outputRoot = path.resolve(process.argv[3] ?? process.cwd());
-const repositoryName = "manigarden";
-const publicOrigin = "https://edwardchina2023-max.github.io";
-const publicBase = `/${repositoryName}`;
+// 2026-10-18：站点已改用自有域名根路径发布（www.mainihaitang.com），不再使用 /manigarden/ 子路径。
+// 导出后请依次运行：python3 scripts/optimize-media.py → node scripts/optimize-static.mjs → node scripts/validate-static.mjs
+const publicOrigin = "https://www.mainihaitang.com";
+const publicBase = "";
 
 if (!sourceDist || !process.argv[2]) {
   throw new Error("Usage: node scripts/export-static.mjs <vinext-dist> [output-root]");
@@ -93,4 +94,4 @@ await cp(path.join(sourceDist, "client/og.png"), path.join(outputRoot, "og.png")
 await writeFile(path.join(outputRoot, ".nojekyll"), "", "utf8");
 await writeFile(path.join(outputRoot, "404.html"), rendered[0], "utf8");
 
-console.log(`Exported ${routes.length} routes for ${publicOrigin}${publicBase}/`);
+console.log(`Exported ${routes.length} routes for ${publicOrigin}/ — 下一步：optimize-media → optimize-static → validate-static`);

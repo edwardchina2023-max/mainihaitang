@@ -1,0 +1,48 @@
+# 麦尼海塘 · 网页上一键恢复
+# 使用：GitHub 仓库 → Actions → “一键恢复到备份版本” → Run workflow → 输入 RESTORE 确认
+name: 一键恢复到备份版本
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_branch:
+        description: "要恢复的备份分支"
+        required: true
+        default: "backup/2026-10-18-before-optimization"
+      confirm:
+        description: "输入 RESTORE 确认恢复"
+        required: true
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm == 'RESTORE' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: 恢复文件树
+        env:
+          BACKUP: ${{ github.event.inputs.backup_branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$BACKUP"
+          git read-tree -u --reset "origin/$BACKUP"
+          if git diff --cached --quiet; then
+            echo "main 已与 $BACKUP 一致，无需恢复。"
+            exit 0
+          fi
+          git commit -m "restore: 恢复到备份 $BACKUP"
+          git push origin HEAD:main
+
+      - name: 触发 GitHub Pages 重新发布
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || echo "如未自动发布，请在 Settings → Pages 手动重新部署。"

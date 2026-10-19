@@ -4,8 +4,8 @@
 // 建议顺序：（如有）重新导出页面 → python3 scripts/optimize-media.py → 本脚本 → node scripts/validate-static.mjs
 //
 // 处理内容：
-// 1. canonical、og:url、og:image、twitter:image 改为 www.mainihaitang.com 绝对地址；补 og:site_name。
-// 2. 七个栏目页的 <title> 与分享标题统一为导航用名。
+// 1. canonical、og:url 改为 www.mainihaitang.com 绝对地址；分享图缺失时补默认图；补 og:site_name。
+// 2. （页面标题与描述由后台“页面设置”管理，本脚本不改写。）
 // 3. favicon、apple-touch-icon、theme-color。
 // 4. 品牌 wordmark / 印章改用 WebP 小图。
 // 5. 视频：写入真实封面；首屏视频保留自动播放，其余改为“进入视口才加载播放”。
@@ -20,17 +20,6 @@ const ORIGIN = "https://www.mainihaitang.com";
 const SITE_NAME = "麦尼海塘 MANI GARDEN";
 const SHARE_IMAGE = `${ORIGIN}/og.jpg`;
 const VIDEO_SCRIPT = '<script src="/assets/mani-video.js" defer></script>';
-
-// 栏目页标题与导航保持同一套名字
-const SECTION_TITLES = {
-  "/huang-hai/": "我在远方 · Out Here｜麦尼海塘",
-  "/diary/": "拉波日记 · Labo Diary｜麦尼海塘",
-  "/field/": "麦尼牧场 · Mani Pasture｜麦尼海塘",
-  "/series/": "理塘风物 · Litang Seasons｜麦尼海塘",
-  "/archive/": "山中四季 · Mountain Seasons｜麦尼海塘",
-  "/evidence/": "求真溯源 · Trace the Source｜麦尼海塘",
-  "/library/": "风的消息 · Tidings on the Wind｜麦尼海塘",
-};
 
 const JSON_LD = {
   "@context": "https://schema.org",
@@ -73,7 +62,7 @@ const JSON_LD = {
 async function collectHtml(directory) {
   const out = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+    if (entry.name.startsWith(".") || ["node_modules", "admin", "scripts"].includes(entry.name)) continue;
     const target = path.join(directory, entry.name);
     if (entry.isDirectory()) out.push(...(await collectHtml(target)));
     else if (entry.name.endsWith(".html")) out.push(target);
@@ -135,19 +124,15 @@ function optimizeHead(html, route, isNotFound) {
     html = html.replace("</head>", `<link rel="canonical" href="${ORIGIN}${route}"/></head>`);
   }
 
-  // 标题统一
-  const title = route && SECTION_TITLES[route];
-  if (title) {
-    html = html.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
-    html = setMeta(html, "property", "og:title", title);
-    html = setMeta(html, "name", "twitter:title", title);
-  }
+  // 页面标题与描述由后台“页面设置”管理，这里不再改写
 
-  // 分享信息
+  // 分享信息：分享图缺失或不是本站绝对地址时，补成默认分享图
   if (!isNotFound) html = setMeta(html, "property", "og:url", `${ORIGIN}${route}`);
   html = setMeta(html, "property", "og:site_name", SITE_NAME);
-  html = setMeta(html, "property", "og:image", SHARE_IMAGE);
-  html = setMeta(html, "name", "twitter:image", SHARE_IMAGE);
+  for (const [attr, key] of [["property", "og:image"], ["name", "twitter:image"]]) {
+    const current = html.match(new RegExp(`<meta ${attr}="${key}" content="([^"]*)"`));
+    if (!current || !current[1].startsWith(`${ORIGIN}/`)) html = setMeta(html, attr, key, SHARE_IMAGE);
+  }
 
   // 图标与主题色
   if (!/apple-touch-icon/.test(html)) {
@@ -180,7 +165,7 @@ for (const file of files) {
   html = optimizeHead(html, route, isNotFound);
   html = optimizeVideos(html, isHomeLike);
 
-  if (/<video/.test(html) && !html.includes(VIDEO_SCRIPT)) {
+  if (/<video/.test(html) && !/mani-video\.js/.test(html)) {
     html = html.replace("</head>", `${VIDEO_SCRIPT}</head>`);
   }
   if (route === "/" && !html.includes('id="mani-jsonld"')) {
@@ -214,6 +199,6 @@ const sitemap =
     .join("\n") +
   "\n</urlset>\n";
 await writeFile(path.join(root, "sitemap.xml"), sitemap, "utf8");
-await writeFile(path.join(root, "robots.txt"), `User-agent: *\nAllow: /\n\nSitemap: ${ORIGIN}/sitemap.xml\n`, "utf8");
+await writeFile(path.join(root, "robots.txt"), `User-agent: *\nAllow: /\nDisallow: /admin/\n\nSitemap: ${ORIGIN}/sitemap.xml\n`, "utf8");
 
 console.log(`已优化 ${files.length} 个页面，sitemap 收录 ${routes.length} 个地址。`);

@@ -37,19 +37,37 @@ def run(cmd):
     return result.stdout
 
 
+MANIFEST_PATH = os.path.join(ROOT, "scripts", "media-manifest.json")
+try:
+    with open(MANIFEST_PATH, encoding="utf-8") as fh:
+        MANIFEST = json.load(fh)
+except (OSError, ValueError):
+    MANIFEST = {}
+
+
 def probe(path):
     data = json.loads(run(["ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json", path]))
     video = next(s for s in data["streams"] if s["codec_type"] == "video")
     has_audio = any(s["codec_type"] == "audio" for s in data["streams"])
     comment = data.get("format", {}).get("tags", {}).get("comment", "")
-    return int(video["width"]), int(video["height"]), float(data["format"]["duration"]), has_audio, comment
+    return int(video["width"]), int(video["height"]), float(data["format"]["duration"]), has_audio, comment, video.get("codec_name", "")
 
 
 def transcode(rel):
     src = os.path.join(ROOT, rel)
-    width, height, duration, has_audio, comment = probe(src)
+    if MANIFEST.get(rel) == os.path.getsize(src):
+        return f"跳过（已处理） {rel}"
+    result = _transcode(rel)
+    MANIFEST[rel] = os.path.getsize(src)
+    return result
+
+
+def _transcode(rel):
+    src = os.path.join(ROOT, rel)
+    width, height, duration, has_audio, comment, codec = probe(src)
     if comment == TAG:
         return f"跳过（已优化） {rel}"
+    must_convert = codec != "h264"  # 例如手机拍的 HEVC，很多浏览器播不了
     hero = rel in HERO_VIDEOS
     long_side = 1920 if hero else 1280
     crf = "25" if hero else "26"
@@ -69,7 +87,7 @@ def transcode(rel):
         cmd += ["-movflags", "+faststart", "-metadata", f"comment={TAG}", out]
         run(cmd)
         before, after = os.path.getsize(src), os.path.getsize(out)
-        if after < before * 0.85:
+        if must_convert or after < before * 0.85:
             shutil.move(out, src)
             return f"压缩 {rel}: {before/1e6:.1f}MB → {after/1e6:.1f}MB"
         return f"保留原文件 {rel}: 压缩收益不足（{before/1e6:.1f}MB → {after/1e6:.1f}MB）"
@@ -83,7 +101,7 @@ def poster(rel):
     if os.path.exists(dst):
         return dst
     os.makedirs(os.path.dirname(dst), exist_ok=True)
-    _, _, duration, _, _ = probe(src)
+    duration = probe(src)[2]
     at = POSTER_TIME.get(rel, min(1.0, duration * 0.1))
     run([
         "ffmpeg", "-y", "-v", "error", "-ss", f"{at:.2f}", "-i", src, "-frames:v", "1",
@@ -133,6 +151,13 @@ def main():
     for rel in sorted(videos):
         print(transcode(rel), flush=True)
         poster(rel)
+    # 删掉已不存在的视频记录，再保存清单（下次运行跳过已处理的视频）
+    for rel in list(MANIFEST):
+        if rel not in videos:
+            del MANIFEST[rel]
+    with open(MANIFEST_PATH, "w", encoding="utf-8") as fh:
+        json.dump(MANIFEST, fh, ensure_ascii=False, indent=1, sort_keys=True)
+        fh.write("\n")
     brand_assets()
     print(f"完成：{len(videos)} 段视频已检查，封面与品牌图已生成。")
 

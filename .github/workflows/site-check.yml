@@ -1,0 +1,67 @@
+# 麦尼海塘 · 发布后自动整理
+# 每次有新内容推送到 main（包括后台发布），自动：
+#   1. 压缩新上传的视频、生成视频封面
+#   2. 补齐 SEO / 分享信息、视频按需播放、站点地图
+#   3. 校验全站链接与资源
+# 有改动就自动提交，并请求 GitHub Pages 重新发布。
+name: 发布后自动整理
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: site-check
+  cancel-in-progress: false
+
+jobs:
+  tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 安装 ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+      - name: 视频压缩与封面
+        run: python3 scripts/optimize-media.py .
+
+      - name: SEO、视频按需播放与站点地图
+        run: node scripts/optimize-static.mjs .
+
+      - name: 全站校验
+        id: validate
+        continue-on-error: true
+        run: node scripts/validate-static.mjs .
+
+      - name: 提交整理结果
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "无需整理。"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "自动整理：视频封面、SEO 与站点地图"
+          git push origin HEAD:main
+          gh api -X POST "repos/${{ github.repository }}/pages/builds" || echo "已提交；如网站未更新，请在 Settings → Pages 手动重新部署。"
+
+      - name: 校验结果
+        if: steps.validate.outcome == 'failure'
+        run: |
+          echo "::error::全站校验没有通过，请查看上面“全站校验”一步的提示（通常是失效链接或缺少文件）。"
+          exit 1

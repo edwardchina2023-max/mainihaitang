@@ -6,12 +6,13 @@ import path from "node:path";
 
 const root = path.resolve(process.argv[2] ?? process.cwd());
 const ORIGIN = "https://www.mainihaitang.com";
-const ALLOWED_SCRIPTS = [/^<script src="\/assets\/mani-video\.js" defer><\/script>/, /^<script type="application\/ld\+json" id="mani-jsonld">/];
+const ALLOWED_SCRIPTS = [/^<script src="\/assets\/mani-video\.js" defer(="")?><\/script>/, /^<script type="application\/ld\+json" id="mani-jsonld">/];
+const SKIP_DIRS = ["node_modules", "admin", "scripts"];
 
 async function collect(directory) {
   const files = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (entry.name.startsWith(".")) continue;
+    if (entry.name.startsWith(".") || SKIP_DIRS.includes(entry.name)) continue;
     const target = path.join(directory, entry.name);
     if (entry.isDirectory()) files.push(...(await collect(target)));
     else files.push(target);
@@ -45,10 +46,10 @@ for (const file of htmlFiles) {
   if (isNotFound) {
     if (/rel="canonical"/.test(html)) fail("404 页不应有 canonical");
     if (!/name="robots" content="noindex"/.test(html)) fail("404 页缺少 noindex");
-  } else if (!html.includes(`<link rel="canonical" href="${ORIGIN}${route}"/>`)) {
+  } else if (!html.includes(`<link rel="canonical" href="${ORIGIN}${route}"`)) {
     fail(`canonical 不正确：${rel}`);
   }
-  if (!html.includes(`<meta property="og:image" content="${ORIGIN}/og.jpg"/>`)) fail(`og:image 不是绝对地址：${rel}`);
+  if (!html.includes(`<meta property="og:image" content="${ORIGIN}/`)) fail(`og:image 不是本站绝对地址：${rel}`);
 
   // 站内链接与资源必须存在
   for (const [, link] of html.matchAll(/(?:href|src|poster)="(\/[^"#?]*)/g)) {

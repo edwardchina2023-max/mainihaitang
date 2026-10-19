@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>麦尼海塘后台</title>
+<link rel="icon" href="/favicon-32.png">
+<link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+
+<!-- 登录 -->
+<section id="login" class="login" hidden>
+  <div class="login-card">
+    <img src="/media/brand/mani-garden-seal.webp" alt="" class="login-seal">
+    <h1>麦尼海塘后台</h1>
+    <p class="login-lead">在真实页面上直接修改文字、图片和板块，改完一键发布到网站。</p>
+    <form id="login-form">
+      <label for="token-input">GitHub 访问令牌</label>
+      <input id="token-input" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…" required>
+      <label class="check"><input id="remember-input" type="checkbox" checked> 在这台设备上记住我</label>
+      <button type="submit" class="btn primary wide">进入后台</button>
+      <p id="login-error" class="error" role="alert"></p>
+    </form>
+    <details class="login-help">
+      <summary>怎样获得令牌</summary>
+      <ol>
+        <li>登录 GitHub，打开 Settings → Developer settings → Personal access tokens → Fine-grained tokens，点 Generate new token。</li>
+        <li>Repository access 选 Only select repositories，勾选 <b>mainihaitang</b>。</li>
+        <li>Permissions → Repository permissions 里，把 <b>Contents</b> 设为 Read and write，其余保持默认。</li>
+        <li>生成后复制以 github_pat_ 开头的那串字符，粘贴到上面。</li>
+      </ol>
+      <p>令牌只保存在你这台设备的浏览器里，不会发给除 GitHub 以外的任何地方。</p>
+    </details>
+  </div>
+</section>
+
+<!-- 工作台 -->
+<div id="app" class="app" hidden>
+  <header class="bar">
+    <div class="bar-left">
+      <img src="/media/brand/mani-garden-seal.webp" alt="" class="bar-seal">
+      <span class="bar-name">麦尼海塘后台</span>
+      <select id="page-select" aria-label="选择页面"></select>
+    </div>
+    <div class="bar-mid" role="group" aria-label="预览尺寸">
+      <button class="seg is-on" data-device="desktop">电脑</button>
+      <button class="seg" data-device="mobile">手机</button>
+    </div>
+    <div class="bar-right">
+      <button class="btn ghost" id="undo-btn" title="撤销上一步（Ctrl+Z）" disabled>撤销</button>
+      <button class="btn ghost" id="newpage-btn">新建页面</button>
+      <button class="btn ghost" id="nav-btn">导航</button>
+      <button class="btn ghost" id="settings-btn">页面设置</button>
+      <button class="btn ghost" id="history-btn">历史版本</button>
+      <a class="btn ghost" id="live-link" target="_blank" rel="noopener">看线上</a>
+      <button class="btn primary" id="publish-btn">发布<span id="change-count" class="count" hidden>0</span></button>
+    </div>
+  </header>
+
+  <aside class="pages" aria-label="页面列表">
+    <h2>页面</h2>
+    <ul id="page-list"></ul>
+    <button class="btn ghost wide" id="newpage-btn-2">新建页面</button>
+    <button class="btn link" id="logout-btn">退出登录</button>
+  </aside>
+
+  <main class="stage">
+    <div id="frame-wrap" class="frame-wrap">
+      <iframe id="frame" title="页面编辑区"></iframe>
+    </div>
+    <div id="loading" class="loading">正在载入网站内容…</div>
+  </main>
+
+  <aside class="inspector" id="inspector" aria-label="属性面板">
+    <div id="inspector-body"></div>
+  </aside>
+</div>
+
+<!-- 弹窗 -->
+<div id="modal" class="modal" hidden>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <header class="modal-head">
+      <h2 id="modal-title"></h2>
+      <button class="btn ghost" id="modal-close" aria-label="关闭">关闭</button>
+    </header>
+    <div id="modal-body" class="modal-body"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" hidden></div>
+<input type="file" id="file-input" hidden>
+
+<script src="/admin/admin.js"></script>
+</body>
+</html>

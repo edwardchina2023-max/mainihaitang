@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 麦尼海塘 · 一键恢复到备份版本
 #
-# 做法：新建一个提交，让网站内容与备份分支完全一致（多出来的文件会被删除），然后推送到 main。
+# 做法：新建一个提交，让网站内容与备份分支一致（多出来的页面会被删除），然后推送到 main。
 # 不改写历史：恢复本身也能再被撤销（git revert 这一提交即可回到优化版）。
 #
 # 用法：bash scripts/restore-backup.sh [备份分支名]
@@ -21,8 +21,13 @@ git merge --ff-only origin/main
 
 # 让暂存区与工作区完全等同于备份分支的文件树
 git read-tree -u --reset "origin/$BACKUP"
+# 后台、自动流程与脚本保持现状，恢复后仍可再回到任何版本
+for d in .github admin scripts; do
+  git rm -r -q -f --ignore-unmatch -- "$d" > /dev/null
+  if git cat-file -e "HEAD:$d" 2>/dev/null; then git checkout HEAD -- "$d"; fi
+done
 
-if git diff --cached --quiet; then
+if git diff --cached --quiet HEAD; then
   echo "当前 main 已经与备份 $BACKUP 一致，无需恢复。"
   exit 0
 fi

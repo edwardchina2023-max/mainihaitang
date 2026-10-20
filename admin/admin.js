@@ -258,6 +258,12 @@
   function frameHtml(html) {
     // 去掉脚本，只保留页面本身；注入编辑高亮样式
     var out = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
+    // 刚上传的文件直接换成本地预览地址，避免编辑区先去网站上请求还不存在的文件
+    uploads.forEach(function (u, key) {
+      ["src", "poster"].forEach(function (attr) {
+        out = out.split(attr + '="/' + key + '"').join(attr + '="' + u.url + '" data-admin-orig-' + attr + '="/' + key + '"');
+      });
+    });
     return out.replace("</head>", '<style data-admin-style>' + EDITOR_CSS + "</style></head>");
   }
 
@@ -298,6 +304,13 @@
     frame.srcdoc = frameHtml(p.html);
   }
 
+  // 换媒体地址：刚上传的文件直接用本地预览地址，原地址记在 data-admin-orig-*，保存时还原
+  function setMediaSrc(el, attr, path) {
+    var up = uploads.get(path.replace(/^\//, ""));
+    if (up) { el.setAttribute("data-admin-orig-" + attr, path); el.setAttribute(attr, up.url); }
+    else el.setAttribute(attr, path);
+  }
+
   // 刚上传、还没上线的文件，在编辑区里用本地预览地址显示
   function swapUploadUrls(doc) {
     if (!doc) return;
@@ -322,8 +335,10 @@
     });
   }
 
+  // 在一个不显示的文档里复制，复制品里的图片、视频不会去网络请求
+  var INERT_DOC = document.implementation.createHTMLDocument("");
   function cleanClone(node) {
-    var clone = node.cloneNode(true);
+    var clone = INERT_DOC.importNode(node, true);
     if (clone.querySelectorAll) {
       clone.querySelectorAll("[data-admin-had-controls]").forEach(function (v) { v.setAttribute("controls", ""); });
       if (clone.hasAttribute && clone.hasAttribute("data-admin-had-controls")) clone.setAttribute("controls", "");
@@ -337,6 +352,8 @@
           el.removeAttribute(a.name);
         } else if (a.name.indexOf("data-admin-") === 0 || a.name === "contenteditable" || a.name === "spellcheck") {
           el.removeAttribute(a.name);
+        } else if (a.name === "style" && !a.value.trim()) {
+          el.removeAttribute(a.name); // 浏览器打字时可能留下空的 style=""
         }
       });
     });
@@ -837,8 +854,7 @@
     pushUndo();
     img.removeAttribute("data-admin-orig-src");
     img.removeAttribute("srcset");
-    img.setAttribute("src", path);
-    swapUploadUrls(frame.contentDocument);
+    setMediaSrc(img, "src", path);
     markDirty(isGlobalArea(img));
     renderInspector();
   }
@@ -854,11 +870,10 @@
     var v = selected;
     pushUndo();
     var s = v.querySelector("source");
-    if (s) { s.removeAttribute("data-admin-orig-src"); s.setAttribute("src", path); }
-    else { v.removeAttribute("data-admin-orig-src"); v.setAttribute("src", path); }
+    if (s) { s.removeAttribute("data-admin-orig-src"); setMediaSrc(s, "src", path); }
+    else { v.removeAttribute("data-admin-orig-src"); setMediaSrc(v, "src", path); }
     v.removeAttribute("poster");
     v.removeAttribute("data-admin-orig-poster");
-    swapUploadUrls(frame.contentDocument);
     if (v.load) v.load();
     markDirty(false);
     renderInspector();
@@ -870,8 +885,8 @@
     addUpload(path, file);
     pushUndo();
     var s = a.querySelector("source");
-    (s || a).setAttribute("src", "/" + path);
-    swapUploadUrls(frame.contentDocument);
+    setMediaSrc(s || a, "src", "/" + path);
+    if (s && a.load) a.load();
     markDirty(false);
     renderInspector();
   }

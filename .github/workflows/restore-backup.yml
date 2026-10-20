@@ -1,5 +1,6 @@
 # 麦尼海塘 · 网页上一键恢复
 # 使用：GitHub 仓库 → Actions → “一键恢复到备份版本” → Run workflow → 输入 RESTORE 确认
+# 网站文件恢复成备份时的样子；后台（admin/）、自动流程（.github/）与脚本（scripts/）保持现状，恢复后仍可再回到任何版本。
 name: 一键恢复到备份版本
 
 on:
@@ -35,7 +36,12 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin "$BACKUP"
           git read-tree -u --reset "origin/$BACKUP"
-          if git diff --cached --quiet; then
+          # 后台、自动流程与脚本保持现状（自动流程的令牌也无权改动 .github/workflows）
+          for d in .github admin scripts; do
+            git rm -r -q -f --ignore-unmatch -- "$d" > /dev/null
+            if git cat-file -e "HEAD:$d" 2>/dev/null; then git checkout HEAD -- "$d"; fi
+          done
+          if git diff --cached --quiet HEAD; then
             echo "main 已与 $BACKUP 一致，无需恢复。"
             exit 0
           fi

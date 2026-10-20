@@ -27,25 +27,40 @@ jobs:
         with:
           ref: main
 
+      - name: 判断是否为新版网站
+        id: guard
+        run: |
+          if grep -q 'id="mani-jsonld"' index.html && [ -f scripts/optimize-static.mjs ]; then
+            echo "run=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "当前是恢复后的旧版网站，跳过自动整理。"
+          fi
+
       - uses: actions/setup-node@v4
+        if: steps.guard.outputs.run == 'yes'
         with:
           node-version: 22
 
       - name: 安装 ffmpeg
+        if: steps.guard.outputs.run == 'yes'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
 
       - name: 视频压缩与封面
+        if: steps.guard.outputs.run == 'yes'
         run: python3 scripts/optimize-media.py .
 
       - name: SEO、视频按需播放与站点地图
+        if: steps.guard.outputs.run == 'yes'
         run: node scripts/optimize-static.mjs .
 
       - name: 全站校验
         id: validate
+        if: steps.guard.outputs.run == 'yes'
         continue-on-error: true
         run: node scripts/validate-static.mjs .
 
       - name: 提交整理结果
+        if: steps.guard.outputs.run == 'yes'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -57,6 +72,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "自动整理：视频封面、SEO 与站点地图"
+          git pull --rebase origin main
           git push origin HEAD:main
           gh api -X POST "repos/${{ github.repository }}/pages/builds" || echo "已提交；如网站未更新，请在 Settings → Pages 手动重新部署。"
 
